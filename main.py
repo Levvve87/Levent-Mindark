@@ -14,7 +14,9 @@ def main():
     load_dotenv()
 
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if api_key:
+        print(api_key)
+    elif not api_key:
         print("Fel: OPENAI_API_KEY miljövariabel saknas!")
         print("Sätt den med: export OPENAI_API_KEY='din-nyckel-här'")
         return
