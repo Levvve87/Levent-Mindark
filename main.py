@@ -31,7 +31,11 @@ def main():
     })
 
     while True:
-        message = input("Skriv din fråga (eller 'quit' för att avsluta): ")
+        try:
+            message = input("Skriv din fråga (eller 'quit' för att avsluta): ")
+        except EOFError:
+            print("\nProgrammet avslutas...")
+            break
 
         if message.lower() == 'quit':
             print("Hej då!")
