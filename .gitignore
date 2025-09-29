@@ -1,7 +1,8 @@
-# Environment variables
+# Virtual Environment
+venv/
+
+# Environment Variables
 .env
-.env.local
-.env.production
 
 # Python
 __pycache__/
@@ -24,11 +25,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# Virtual environments
-venv/
-env/
-ENV/
 
 # IDE
 .vscode/

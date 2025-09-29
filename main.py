@@ -24,20 +24,25 @@ def main():
         temperature=0.7
     )
     
-    # Använd .invoke() metod enligt LangChain Runnable dokumentation
-    message = "Hej! Kan du berätta en kort vits på svenska?"
-    
-    print("Användare:", message)
-    print("Assistent:", end=" ")
-    
-    try:
-        # Anropa modellen med .invoke() - detta är kärnan i uppgiften
-        response = model.invoke(message)
-        print(response.content)
+    # Interaktiv chat med OpenAI
+    while True:
+        message = input("Skriv din fråga (eller 'quit' för att avsluta): ")
         
-    except Exception as e:
-        print(f"Fel vid anrop till OpenAI: {e}")
-        print("Kontrollera att din API-nyckel är korrekt och att du har internetanslutning.")
+        if message.lower() == 'quit':
+            print("Hej då!")
+            break
+            
+        print("Användare:", message)
+        print("Assistent:", end=" ")
+        
+        try:
+            # Anropa modellen med .invoke() - detta är kärnan i uppgiften
+            response = model.invoke(message)
+            print(response.content)
+            
+        except Exception as e:
+            print(f"Fel vid anrop till OpenAI: {e}")
+            print("Kontrollera att din API-nyckel är korrekt och att du har internetanslutning.")
 
 if __name__ == "__main__":
     main()
