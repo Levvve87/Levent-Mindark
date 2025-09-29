@@ -13,7 +13,9 @@ def main():
     
     # Kontrollera att API-nyckeln finns
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if api_key:
+        print(api_key)
+    elif not api_key:
         print("Fel: OPENAI_API_KEY miljövariabel saknas!")
         print("Sätt den med: export OPENAI_API_KEY='din-nyckel-här'")
         return
@@ -25,15 +27,15 @@ def main():
     )
     
     # Använd .invoke() metod enligt LangChain Runnable dokumentation
-    message = "Hej! Kan du berätta en kort vits på svenska?"
+
     
     print("Användare:", message)
-    print("Assistent:", end=" ")
+    
     
     try:
         # Anropa modellen med .invoke() - detta är kärnan i uppgiften
         response = model.invoke(message)
-        print(response.content)
+        print(f"Svar från AI: {response.content}")
         
     except Exception as e:
         print(f"Fel vid anrop till OpenAI: {e}")
