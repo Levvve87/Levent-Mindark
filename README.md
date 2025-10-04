@@ -59,4 +59,3 @@ model = ChatOpenAI(model="gpt-4o-mini")
 response = model.invoke("Hej!")
 print(response.content)
 ```
-
