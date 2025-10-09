@@ -179,3 +179,14 @@ with col2:
             )
         else:
             st.warning("Inga meddelanden att exportera.")
+
+    if st.button("Exportera TXT"):
+        try:
+            txt_data = memory.export_messages(format="txt")
+            st.download_button(
+                label="Ladda ner chatt som TXT",
+                data=txt_data,
+                file_name=f"chatt_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt",
+            )
+        except Exception as e:
+            st.warning(f"Kunde inte exportera TXT: {e}")
