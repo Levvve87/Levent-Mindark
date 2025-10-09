@@ -1,14 +1,4 @@
-# Appens huvudfil: sätter upp UI, minne och LLM; visar även debug-info
-# Övergripande översikt (SRP och struktur):
-# - Start & miljö: Läser .env och validerar OPENAI_API_KEY, stoppar snyggt om den saknas
-# - UI-setup: Sätter sidtitel/layout och huvudrubrik
-# - Init av tjänster: Skapar MemoryManager (konversation/debug) och LLMHandler (modell/anrop)
-# - Session state: Säkerställer messages/debug_info och synkar dem till MemoryManager
-# - Sidofält (inställningar): Enkla kontroller för modell och temperatur (påverkar nästa anrop)
-# - Chat-kolumn: Visar historik, samlar in nytt meddelande (form), och hanterar skick/anrop/svar
-# - Debug-kolumn: Utfällbar panel med senaste debugdata (modell, tider, token, payload, rå-output)
-# - Åtgärder: Rensa (nollställer historik/debug) och Exportera (nedladdning av JSON)
-import streamlit as st
+
 import os
 import json
 from datetime import datetime
@@ -18,6 +8,7 @@ from config import Config
 from memory_manager import MemoryManager
 from llm_handler import LLMHandler
 
+# ===== Miljö & startskydd =====
 # Miljö/konfiguration – läs API-nyckel och avbryt snyggt om den saknas
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -26,14 +17,17 @@ if not OPENAI_API_KEY:
     st.error("API-nyckel saknas. Lägg till OPENAI_API_KEY i .env och starta om.")
     st.stop()
 
+# ===== UI-setup (titel & layout) =====
 # Bas-UI – titel och sidlayout
 st.set_page_config(page_title="AI-chat", layout="wide")
 st.title("AI-chat med debugpanel")
 
+# ===== Init av tjänster =====
 # Init – minneshanterare och LLM-klient
 memory = MemoryManager()
 llm_handler = LLMHandler()
 
+# ===== Session state =====
 # Session state – säkerställ strukturer som överlever omritningar
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -41,10 +35,12 @@ if "messages" not in st.session_state:
 if "debug_info" not in st.session_state:
     st.session_state.debug_info = []
 
+# ===== Synkronisering av historik till minneshanterare =====
 # Synkronisering – bygg upp minnet från tidigare meddelanden i sessionen
 for message in st.session_state.messages:
     memory.add_message(message["role"], message["content"])
 
+# ===== Sidofält (inställningar) =====
 with st.sidebar:
     st.header("Modellinställningar")
     model = st.selectbox(
@@ -65,10 +61,12 @@ with st.sidebar:
     )
     
 
+# ===== Layout (chat + debug) =====
 # Layout – två kolumner: vänster (chat), höger (debug/kontroller)
 col1, col2 = st.columns([2, 1])
 
 with col1:
+    # ===== Chat (UI) =====
     # Vänster kolumn – chattgränssnitt
     st.subheader("Chat")
     
@@ -77,11 +75,13 @@ with col1:
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
+    # ===== Inmatning (form) =====
     # Inmatning – form med Skicka-knapp och Enter-stöd
     with st.form("chat_form", clear_on_submit=True):
         user_text = st.text_input("Skriv ditt meddelande…", value="")
         submitted = st.form_submit_button("Skicka")
 
+    # ===== Sändningskedja (uppdatera historik → anropa LLM → visa svar) =====
     # Hantera skick – uppdatera historik, anropa LLM, visa svar
     if submitted and user_text.strip():
         st.session_state.messages.append({"role": "user", "content": user_text})
@@ -111,6 +111,7 @@ with col1:
                     st.error(f"Fel vid AI-anrop: {str(e)}")
 
 with col2:
+    # ===== Debugpanel & åtgärder =====
     # Höger kolumn – debugpanel och åtgärdsknappar
     st.subheader("Debug Panel")
 
@@ -160,6 +161,7 @@ with col2:
         # Ingen debug ännu – troligen inget anrop gjort eller ingen metadata
         st.write("Ingen debug-information ännu. Skicka ett meddelande för att se data.")
 
+    # ===== Åtgärder =====
     # Åtgärder – rensa session/minne och visa kvittens
     if st.button("Rensa chatt"):
         st.session_state.messages.clear()
@@ -168,6 +170,7 @@ with col2:
         memory.clear_debug_info()
         st.success("Chatt rensad!")
 
+    # ===== Export (JSON) =====
     # Export – ladda ner historiken som JSON för analys/testning
     if st.button("Exportera chatt"):
         if st.session_state.messages:
@@ -180,6 +183,7 @@ with col2:
         else:
             st.warning("Inga meddelanden att exportera.")
 
+    # ===== Export (TXT) =====
     if st.button("Exportera TXT"):
         try:
             txt_data = memory.export_messages(format="txt")

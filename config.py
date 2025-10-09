@@ -1,6 +1,9 @@
 """
-Konfigurationsmodul för AI-chattapplikationen
-Hanterar alla inställningar och konfigurationer
+Konfigurationsmodul
+Översikt:
+- Läser miljövariabler (.env) och tillgängliggör OPENAI_API_KEY
+- Samlar standardinställningar (modell, temperatur, UI, debug, feltexter)
+- Erbjuder enkel validering av konfiguration
 """
 
 import os

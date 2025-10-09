@@ -1,6 +1,9 @@
 """
-LLM-hanteringsmodul för AI-chattapplikationen
-Hanterar kommunikation med OpenAI API via LangChain
+LLM-hanteringsmodul
+Översikt:
+- Initierar och uppdaterar LLM-klienten (modell/temperatur)
+- Tar emot meddelandelista och anropar modellen
+- Returnerar svar samt debug-info (modell, tider, token, payload, rå-output)
 """
 
 import time
@@ -9,7 +12,7 @@ from langchain_openai import ChatOpenAI
 from config import Config
 
 class LLMHandler:
-    """Hanterar kommunikation med OpenAI API"""
+    """Publikt API för LLM-anrop och modellinställningar"""
     
     def __init__(self, model_name: str = None, temperature: float = None):
         """
@@ -25,7 +28,7 @@ class LLMHandler:
         self._initialize_model()
     
     def _initialize_model(self) -> None:
-        """Initierar OpenAI-modellen"""
+        """Initierar/återinitierar ChatOpenAI-klienten utifrån aktuella inställningar"""
         try:
             self.model = ChatOpenAI(
                 model=self.model_name,

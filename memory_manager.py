@@ -1,6 +1,9 @@
 """
-Minneshanteringsmodul för AI-chattapplikationen
-Hanterar konversationshistorik och meddelanden
+Minneshanteringsmodul
+Översikt:
+- Lagrar konversationsmeddelanden och debug-poster i minnet
+- Erbjuder API för att lägga till/cleara/hämta historik
+- Exporterar historik som JSON eller TXT för analys/delning
 """
 
 import json

@@ -34,7 +34,4 @@ streamlit run app.py
 - “Rensa chatt” tömmer historiken. “Exportera chatt” laddar ner JSON.
 - Debugpanelen visar senaste anropsdata (modell, temperatur, svarstid m.m.).
 
-## Tips
-- Håll hemligheter i `.env` (inte i git).
-- Kör alltid `pip install -r requirements.txt` i en aktiverad virtuell miljö.
-- Om något strular: kontrollera API‑nyckel, nätverk och fel i debugpanelen.
+
