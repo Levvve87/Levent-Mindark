@@ -103,62 +103,41 @@ with col1:
         # Sätt flagga för att spåra om anropet ska avbrytas
         st.session_state.abort_requested = False
         
-        # Skapa en container för spinner och avbryt-knapp
-        spinner_container = st.empty()
-        abort_container = st.empty()
-        
-        with spinner_container:
-            with st.spinner("Tänker..."):
-                try:
-                    # Uppdatera modellinställningar
-                    llm_handler.update_model_settings(
-                        model_name=model,
-                        temperature=temp
-                    )
+        with st.spinner("Tänker..."):
+            try:
+                # Uppdatera modellinställningar och hämta historik
+                llm_handler.update_model_settings(model_name=model, temperature=temp)
+                conversation_history = memory.get_conversation_history()
+                
+                # Visa avbryt-knapp under anropet
+                if st.button("Avbryt anrop", key="abort_button"):
+                    st.session_state.abort_requested = True
+                    st.warning("Avbryter anrop...")
+                    st.stop()
+                
+                # Anropa LLM och kontrollera avbrott
+                response, debug_info = llm_handler.invoke(conversation_history)
+                if st.session_state.get("abort_requested", False):
+                    st.warning("Anrop avbrutet av användaren.")
+                    st.stop()
+                
+                # Lägg till svar i minnet och session_state
+                memory.add_message("assistant", response.content)
+                memory.add_debug_info(debug_info)
+                ai_timestamp = datetime.now().strftime("%H:%M:%S")
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response.content,
+                    "timestamp": ai_timestamp
+                })
 
-                    # Hämta konversationshistorik
-                    conversation_history = memory.get_conversation_history()
-                    
-                    # Visa avbryt-knapp under anropet
-                    with abort_container:
-                        if st.button("Avbryt anrop", key="abort_button"):
-                            st.session_state.abort_requested = True
-                            st.warning("Avbryter anrop...")
-                            st.stop()  # Stoppa execution här
-                    
-                    # Anropa LLM (detta kan ta tid)
-                    response, debug_info = llm_handler.invoke(conversation_history)
-                    
-                    # Kontrollera om anropet avbröts
-                    if st.session_state.get("abort_requested", False):
-                        st.warning("Anrop avbrutet av användaren.")
-                        st.stop()
-                    
-                    # Lägg till svar i minnet
-                    memory.add_message("assistant", response.content)
-                    memory.add_debug_info(debug_info)
+                # Visa AI-svaret
+                with st.chat_message("assistant"):
+                    st.write(response.content)
 
-                    # Lägg till AI-svar med tidsstämpel i session_state
-                    ai_timestamp = datetime.now().strftime("%H:%M:%S")
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response.content,
-                        "timestamp": ai_timestamp
-                    })
-
-                    # Visa AI-svaret
-                    with st.chat_message("assistant"):
-                        st.write(response.content)
-                    
-                    # Rensa avbryt-knappen efter framgång
-                    abort_container.empty()
-
-                except Exception as e:
-                    # Rensa avbryt-knappen vid fel
-                    abort_container.empty()
-                    
-                    with st.chat_message("assistant"):
-                        st.error(f"Fel vid AI-anrop: {str(e)}")
+            except Exception as e:
+                with st.chat_message("assistant"):
+                    st.error(f"Fel vid AI-anrop: {str(e)}")
 
 with col2:
     # ===== Debugpanel & åtgärder =====
@@ -176,24 +155,19 @@ with col2:
 
         # Expander minskar visuellt brus; detaljer visas bara vid behov.
         with st.expander("Visa detaljerad debug"):
-            # 1) Snabb översikt - viktigaste info först (modell, temp, tider, status)
+            # Snabb översikt
             st.markdown("### 📊 Snabb översikt")
             st.markdown(f"• **Modell:** `{dbg.get('model', 'okänt')}`")
             st.markdown(f"• **Temperatur:** `{dbg.get('temperature', 'okänt')}`")
             st.markdown(f"• **Meddelanden:** `{dbg.get('messages_count', 'okänt')}`")
             
-            # Svarstid med färgkodning (grön = snabb, röd = långsam)
+            # Svarstid med färgkodning
             if "response_time" in dbg:
                 response_time = dbg['response_time']
-                if response_time < 2.0:
-                    color = "🟢"
-                elif response_time < 5.0:
-                    color = "🟡"
-                else:
-                    color = "🔴"
+                color = "🟢" if response_time < 2.0 else "🟡" if response_time < 5.0 else "🔴"
                 st.markdown(f"• **Svarstid:** {color} `{round(response_time, 3)}s`")
             
-            # Status-indikator (framgång/misslyckande)
+            # Status
             if dbg.get("success", False):
                 st.markdown("• **Status:** ✅ Framgång")
             else:
@@ -201,57 +175,43 @@ with col2:
                 if "error" in dbg:
                     st.markdown(f"• **Fel:** `{dbg['error']}`")
 
-            # 2) Token-statistik (om tillgänglig) - viktigt för kostnadskontroll
+            # Token-statistik
             token_usage = dbg.get("token_usage")
             if isinstance(token_usage, dict) and any(v != "N/A" for v in token_usage.values()):
                 st.markdown("### 🔢 Token-användning")
-                st.markdown(f"• **Prompt-tokens:** `{token_usage.get('prompt_tokens', 'N/A')}`")
-                st.markdown(f"• **Completion-tokens:** `{token_usage.get('completion_tokens', 'N/A')}`")
+                st.markdown(f"• **Prompt:** `{token_usage.get('prompt_tokens', 'N/A')}`")
+                st.markdown(f"• **Completion:** `{token_usage.get('completion_tokens', 'N/A')}`")
                 st.markdown(f"• **Totalt:** `{token_usage.get('total_tokens', 'N/A')}`")
                 
-                # Beräkna ungefärlig kostnad (ungefärliga siffror för GPT-4o-mini)
+                # Kostnad
                 if token_usage.get('total_tokens') != "N/A":
                     total = token_usage.get('total_tokens', 0)
                     if isinstance(total, int):
-                        # Ungefärlig kostnad: $0.00015 per 1K tokens för GPT-4o-mini
                         cost = (total / 1000) * 0.00015
-                        st.markdown(f"• **Uppskattad kostnad:** ~${cost:.6f}")
+                        st.markdown(f"• **Kostnad:** ~${cost:.6f}")
 
-            # 3) Payload - vad som faktiskt skickades till LLM (kritiskt för debugging)
+            # Payload
             payload = dbg.get("payload")
             if isinstance(payload, dict):
-                st.markdown("### 📤 Payload (vad som skickades till LLM)")
-                st.markdown("**Meddelanden som skickades:**")
+                st.markdown("### 📤 Payload")
                 for i, msg in enumerate(payload.get("messages", []), 1):
                     role = msg.get("role", "unknown")
                     content = msg.get("content", "")
-                    # Trunkera långa meddelanden för läsbarhet
                     if len(content) > 200:
                         content = content[:200] + "..."
                     st.markdown(f"  **{i}.** `{role}`: {content}")
-                
-                # Visa full payload som JSON för teknisk detalj
-                with st.expander("Visa fullständig payload (JSON)"):
-                    st.json(payload)
 
-            # 4) Rå output - vad som kom tillbaka från LLM innan efterbearbetning
+            # Rå output
             raw_response = dbg.get("raw_response")
             if raw_response:
-                st.markdown("### 📥 Rå output från LLM")
-                st.markdown("**Innan efterbearbetning:**")
-                # Trunkera för att undvika jättelånga rutor
+                st.markdown("### 📥 Rå output")
                 raw_text = str(raw_response)
                 if len(raw_text) > 1000:
                     st.code(raw_text[:1000] + "\n... (trunkerad)")
-                    st.caption("💡 Output trunkerad för läsbarhet. Full output finns i JSON nedan.")
                 else:
                     st.code(raw_text)
-                
-                # Visa full rå output som JSON
-                with st.expander("Visa fullständig rå output (JSON)"):
-                    st.json({"raw_response": raw_response})
 
-            # 5) Fullständig debug-data (för avancerad felsökning)
+            # Fullständig debug-data
             with st.expander("Visa all debug-data (JSON)"):
                 st.json(dbg)
     else:
@@ -275,8 +235,8 @@ with col2:
             st.session_state.abort_requested = True
             st.warning("Avbryt-signal skickad. Anropet kommer att stoppas vid nästa kontroll.")
 
-    # ===== Export (JSON) =====
-    # Export – ladda ner historiken som JSON för analys/testning
+    # ===== Export =====
+    # Export – ladda ner historiken som JSON eller TXT
     if st.button("Exportera chatt"):
         if st.session_state.messages:
             json_data = json.dumps(st.session_state.messages, ensure_ascii=False, indent=2)
@@ -288,7 +248,6 @@ with col2:
         else:
             st.warning("Inga meddelanden att exportera.")
 
-    # ===== Export (TXT) =====
     if st.button("Exportera TXT"):
         try:
             txt_data = memory.export_messages(format="txt")
