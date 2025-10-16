@@ -9,6 +9,35 @@ from config import Config
 from memory_manager import MemoryManager
 from llm_handler import LLMHandler
 
+def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
+    mode = mode or "Lärläge",
+    subject = subject or "Allmänt",
+    difficulty = difficult or "Medel" 
+
+    base = (
+        f"Ämne: {subject}. Nivå: {difficulty}."
+        f"Svara på svenska och håll dig konkret och hjälpsam"
+
+    )
+
+    if mode == "Lärläge":
+        style = (
+            "Du är en pedagogisk handledare."
+            "Ge korta, begripliga förklaringar och 1-2 enkla exemperl."
+            "Belys nyckelgrepp tydligt."
+        )
+
+    else:
+        style = (
+            "Du är en coach."
+            "Ge 1-3 konkreta övningar med tydliga steg."
+            "Lägg till kort återkopplingstips efter varje övning."
+        )
+
+    return f"{base} {style }"
+
+
+
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
@@ -26,6 +55,11 @@ if "messages" not in st.session_state:
 if "debug_info" not in st.session_state:
     st.session_state.debug_info = []
 
+st.session_state.setdefault("mode", "Lärläge")
+st.session_state.setdefault("subject", "Programmering")
+st.session_state.setdefault("difficulty", "Medel")
+
+
 for message in st.session_state.messages:
     memory.add_message(message["role"], message["content"])
 
@@ -36,6 +70,7 @@ with st.sidebar:
         options=["gpt-4o-mini", "gpt-4o"],
         index=0,
         help="Välj modell för nästa anrop."
+
     )
     temp = st.slider(
         "Temperatur",
@@ -45,6 +80,23 @@ with st.sidebar:
         step=0.1,
         help="Lägre = mer fokuserat, högre = mer kreativt."
     )
+
+st.radio("Läge", ["Lärläge", "Övningsläge"], key="mode", help="Välj hur tipsen ska utformas")
+
+st.selectbox(
+    "Ämne",
+    ["Programmering", "Språk", "Matematik", "Design", "Dataanalys", "Projektledning"],
+)
+
+st.select_slider(
+    "Svårighetsgrad",
+    options=["Lätt", "Medel", "Svår"],
+    key="difficulty",
+    help="Välj nivå: Lätt för introduktion, Medel för fördjupning, Svår för avancerat."
+
+)
+
+
 
 col1, col2 = st.columns([2, 1])
 
