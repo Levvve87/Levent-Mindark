@@ -36,6 +36,32 @@ def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
 
     return f"{base} {style }"
 
+def add_message_to_chat(role, content, timestamp=None):
+    """Lägger till meddelande i både memory och session_state"""
+    memory.add_message(role, content)
+    if not timestamp:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+    st.session_state.messages.append({
+        "role": role,
+        "content": content,
+        "timestamp": timestamp
+    })
+
+def get_system_prompt():
+    """Hämtar systemprompt baserat på vald mode/prompt"""
+    selected_saved_prompt = st.session_state.get("selected_saved_prompt", "Ingen prompt vald")
+    
+    if selected_saved_prompt != "Ingen prompt vald" and selected_saved_prompt in st.session_state.saved_prompts:
+        return st.session_state.saved_prompts[selected_saved_prompt]['content']
+    elif st.session_state.get("mode") == "Demo/Exempel":
+        return st.session_state.get("demo_example")
+    else:
+        return build_system_prompt(
+            st.session_state.get("mode", "Lärläge"),
+            st.session_state.get("subject", "Programmering"),
+            st.session_state.get("difficulty", "Medel")
+        )
+
 def get_demo_examples():
     return {
         "Programmering": {
@@ -224,6 +250,137 @@ with st.sidebar:
             st.warning("Inga exempel tillgängliga för detta ämne/nivå")
             selected_example = None
 
+    st.markdown("---")
+    st.subheader("Prompt Builder")
+    
+    if "saved_prompts" not in st.session_state:
+        st.session_state.saved_prompts = {}
+    
+    st.caption("Spara och hantera dina egna prompts")
+
+    with st.expander("Spara ny prompt", expanded=False):
+        with st.form("save_prompt_form", clear_on_submit=True):
+            prompt_name = st.text_input(
+                "Namn på prompt:",
+                placeholder="t.ex. 'Kodgranskning'",
+                help="Ge din prompt ett beskrivande namn"
+            )
+            prompt_content = st.text_area(
+                "Prompt-innehåll:",
+                placeholder="Skriv din prompt här...",
+                height=100,
+                help="Detta är själva prompten som ska användas"
+            )
+            prompt_description = st.text_input(
+                "Beskrivning (valfritt):",
+                placeholder="t.ex. 'För att granska kodkvalitet'",
+                help="Kort beskrivning av vad prompten gör"
+            )
+            save_button = st.form_submit_button("Spara prompt")
+            
+            if save_button:
+                if prompt_name and prompt_content:
+                    st.session_state.saved_prompts[prompt_name] = {
+                        "content": prompt_content,
+                        "description": prompt_description or ""
+                    }
+                    st.success(f"Prompt '{prompt_name}' sparad!")
+                else:
+                    st.error("Namn och innehåll krävs!")
+
+    if st.session_state.saved_prompts:
+        st.markdown("### Sparade prompts")
+        
+        prompt_names = list(st.session_state.saved_prompts.keys())
+        selected_prompt = st.selectbox(
+            "Välj en sparad prompt:",
+            ["Ingen prompt vald"] + prompt_names,
+            key="selected_saved_prompt",
+            help="Välj en sparad prompt att använda"
+        )
+        
+        if selected_prompt != "Ingen prompt vald":
+            prompt_data = st.session_state.saved_prompts[selected_prompt]
+            st.info(f"**{selected_prompt}**")
+            if prompt_data["description"]:
+                st.caption(f"{prompt_data['description']}")
+            with st.expander("Visa prompt-innehåll"):
+                st.code(prompt_data["content"], language="text")
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("Redigera", key=f"edit_{selected_prompt}"):
+                    st.session_state[f"editing_{selected_prompt}"] = True
+            
+            with col2:
+                if st.button("Ta bort", key=f"delete_{selected_prompt}"):
+                    st.session_state[f"confirm_delete_{selected_prompt}"] = True
+            
+            if st.session_state.get(f"confirm_delete_{selected_prompt}", False):
+                st.warning("Är du säker på att du vill ta bort denna prompt?")
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    if st.button("Ja, ta bort", key=f"confirm_yes_{selected_prompt}"):
+                        del st.session_state.saved_prompts[selected_prompt]
+                        st.session_state[f"confirm_delete_{selected_prompt}"] = False
+                        st.session_state.selected_saved_prompt = "Ingen prompt vald"
+                        st.success(f"Prompt '{selected_prompt}' borttagen!")
+                        st.rerun()
+                with col2:
+                    if st.button("Avbryt", key=f"confirm_no_{selected_prompt}"):
+                        st.session_state[f"confirm_delete_{selected_prompt}"] = False
+                        st.rerun()
+            
+            if st.session_state.get(f"editing_{selected_prompt}", False):
+                st.markdown("#### Redigera prompt")
+                with st.form(f"edit_form_{selected_prompt}", clear_on_submit=False):
+                    new_name = st.text_input(
+                        "Nytt namn:",
+                        value=selected_prompt,
+                        key=f"new_name_{selected_prompt}"
+                    )
+                    new_content = st.text_area(
+                        "Nytt innehåll:",
+                        value=prompt_data["content"],
+                        height=100,
+                        key=f"new_content_{selected_prompt}"
+                    )
+                    new_description = st.text_input(
+                        "Ny beskrivning:",
+                        value=prompt_data["description"],
+                        key=f"new_description_{selected_prompt}"
+                    )
+                    
+                    col1, col2, col3 = st.columns([1, 1, 1])
+                    with col1:
+                        save_edit = st.form_submit_button("Spara ändringar")
+                    with col2:
+                        cancel_edit = st.form_submit_button("Avbryt")
+                    
+                    if save_edit:
+                        if new_name and new_content:
+                            # Ta bort gamla prompten om namnet ändrats
+                            if new_name != selected_prompt:
+                                del st.session_state.saved_prompts[selected_prompt]
+                            
+                            # Lägg till den uppdaterade prompten
+                            st.session_state.saved_prompts[new_name] = {
+                                "content": new_content,
+                                "description": new_description or ""
+                            }
+                            st.session_state[f"editing_{selected_prompt}"] = False
+                            st.session_state.selected_saved_prompt = new_name
+                            st.success(f"Prompt uppdaterad som '{new_name}'!")
+                            st.rerun()
+                        else:
+                            st.error("Namn och innehåll krävs!")
+                    
+                    if cancel_edit:
+                        st.session_state[f"editing_{selected_prompt}"] = False
+                        st.rerun()
+    else:
+        st.info("Inga sparade prompts än. Spara din första prompt ovan!")
+
 col1, col2 = st.columns([2, 1])
 
 with col1:
@@ -232,46 +389,20 @@ with col1:
         with st.chat_message(message["role"]):
             st.write(message["content"])
             if "timestamp" in message:
-                st.caption(f"📅 {message['timestamp']}")
+                st.caption(f"{message['timestamp']}")
 
     if st.button("Få tips"):
-        current_mode = st.session_state.get("mode", "Lärläge")
-        current_subject = st.session_state.get("subject", "Programmering")
-        current_difficulty = st.session_state.get("difficulty", "Medel")
-
-        if current_mode == "Demo/Exempel":
-            selected_example = st.session_state.get("demo_example")
-            if selected_example:
-                system_prompt = f"Du är en hjälpsam AI-assistent. Svara på svenska och håll dig konkret och pedagogisk. Användaren har frågat: {selected_example}"
-                user_trigger = selected_example
-            else:
-                st.warning("Välj ett exempel först!")
-                st.stop()
-        else:
-            system_prompt = build_system_prompt(
-                mode=current_mode,
-                subject=current_subject,
-                difficulty=current_difficulty
-            )
-            user_trigger = f"Ge mig tips inom {current_subject} på nivån {current_difficulty}."
-
-        memory.add_message("system", system_prompt)
-        memory.add_message("user", user_trigger)
-
-        timestamp_now = datetime.now().strftime("%H:%M:%S")
-        st.session_state.messages.append({
-            "role": "system",
-            "content": system_prompt,
-            "timestamp": timestamp_now
-        })
-        st.session_state.messages.append({
-            "role": "user",
-            "content": user_trigger,
-            "timestamp": timestamp_now
-        })
+        system_prompt = get_system_prompt()
+        if not system_prompt:
+            st.warning("Välj ett exempel först!")
+            st.stop()
+        
+        user_trigger = system_prompt
+        add_message_to_chat("system", f"Du är en hjälpsam AI-assistent. Svara på svenska och håll dig konkret och pedagogisk. Användaren har frågat: {system_prompt}")
+        add_message_to_chat("user", user_trigger)
 
         with st.chat_message("system"):
-            st.write(system_prompt)
+            st.write(f"Du är en hjälpsam AI-assistent. Svara på svenska och håll dig konkret och pedagogisk. Användaren har frågat: {system_prompt}")
 
         with st.chat_message("user"):
             st.write(user_trigger)
@@ -293,17 +424,10 @@ with col1:
                     st.warning("Anrop avbrutet av användaren.")
                     st.stop()
 
-                memory.add_message("assistant", response.content)
-                memory.add_debug_info(debug_info)
-
-                ai_timestamp = datetime.now().strftime("%H:%M:%S")
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response.content,
-                    "timestamp": ai_timestamp
-                })
-                with st.chat_message("assistant"):
-                    st.write(response.content)
+            add_message_to_chat("assistant", response.content)
+            memory.add_debug_info(debug_info)
+            with st.chat_message("assistant"):
+                st.write(response.content)
         except Exception as e:
             with st.chat_message("assistant"):
                 st.error(f"Fel vid tips: {str(e)}")
@@ -313,15 +437,9 @@ with col1:
         submitted = st.form_submit_button("Skicka")
 
     if submitted and user_text.strip():
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        st.session_state.messages.append({
-            "role": "user",
-            "content": user_text,
-            "timestamp": timestamp
-        })
+        add_message_to_chat("user", user_text)
         with st.chat_message("user"):
             st.write(user_text)
-        memory.add_message("user", user_text)
         st.session_state.abort_requested = False
         with st.spinner("Tänker..."):
             try:
@@ -335,14 +453,8 @@ with col1:
                 if st.session_state.get("abort_requested", False):
                     st.warning("Anrop avbrutet av användaren.")
                     st.stop()
-                memory.add_message("assistant", response.content)
+                add_message_to_chat("assistant", response.content)
                 memory.add_debug_info(debug_info)
-                ai_timestamp = datetime.now().strftime("%H:%M:%S")
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response.content,
-                    "timestamp": ai_timestamp
-                })
                 with st.chat_message("assistant"):
                     st.write(response.content)
             except Exception as e:
