@@ -10,9 +10,9 @@ from memory_manager import MemoryManager
 from llm_handler import LLMHandler
 
 def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
-    mode = mode or "Lärläge",
-    subject = subject or "Allmänt",
-    difficulty = difficult or "Medel" 
+    mode = mode or "Lärläge"
+    subject = subject or "Allmänt"
+    difficulty = difficulty or "Medel"
 
     base = (
         f"Ämne: {subject}. Nivå: {difficulty}."
@@ -36,7 +36,112 @@ def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
 
     return f"{base} {style }"
 
-
+def get_demo_examples():
+    return {
+        "Programmering": {
+            "Lätt": [
+                "Förklara vad en variabel är i programmering",
+                "Vad är skillnaden mellan en lista och en dictionary?",
+                "Hur fungerar en if-sats?"
+            ],
+            "Medel": [
+                "Skriv en funktion som räknar antalet ord i en text",
+                "Förklara objektorienterad programmering med exempel",
+                "Vad är skillnaden mellan en klass och ett objekt?"
+            ],
+            "Svår": [
+                "Implementera en binär sökning i Python",
+                "Förklara design patterns med praktiska exempel",
+                "Optimera denna algoritm för bättre prestanda"
+            ]
+        },
+        "Matematik": {
+            "Lätt": [
+                "Lös ekvationen: 2x + 5 = 13",
+                "Vad är arean av en cirkel med radie 5?",
+                "Förklara vad procent är med exempel"
+            ],
+            "Medel": [
+                "Derivera funktionen f(x) = x² + 3x + 2",
+                "Lös andragradsekvationen: x² - 4x + 3 = 0",
+                "Förklara trigonometri med praktiska exempel"
+            ],
+            "Svår": [
+                "Lös differentialekvationen: dy/dx = 2y",
+                "Beräkna integralen: ∫(x² + 1)dx från 0 till 2",
+                "Förklara komplexa tal och deras användning"
+            ]
+        },
+        "Språk": {
+            "Lätt": [
+                "Förklara skillnaden mellan substantiv och adjektiv",
+                "Vad är en mening och hur bygger man en?",
+                "Ge exempel på olika typer av pronomen"
+            ],
+            "Medel": [
+                "Analysera stilistiska verktyg i denna text",
+                "Förklara skillnaden mellan aktiv och passiv form",
+                "Vad är en metafor och ge exempel"
+            ],
+            "Svår": [
+                "Skriv en litterär analys av denna dikt",
+                "Förklara postmodernistiska litterära tekniker",
+                "Analysera språkets makt i politisk retorik"
+            ]
+        },
+        "Design": {
+            "Lätt": [
+                "Förklara skillnaden mellan form och funktion i design",
+                "Vad är färgteori och hur använder man den?",
+                "Ge exempel på god typografi"
+            ],
+            "Medel": [
+                "Skapa en wireframe för en mobilapp",
+                "Förklara gestaltprinciperna med exempel",
+                "Vad är skillnaden mellan UX och UI?"
+            ],
+            "Svår": [
+                "Designa en komplett design system",
+                "Förklara design thinking-processen",
+                "Analysera denna designs användarupplevelse"
+            ]
+        },
+        "Dataanalys": {
+            "Lätt": [
+                "Förklara skillnaden mellan kvalitativ och kvantitativ data",
+                "Vad är en korrelation och hur mäter man den?",
+                "Ge exempel på olika typer av diagram"
+            ],
+            "Medel": [
+                "Analysera denna dataset och hitta mönster",
+                "Förklara skillnaden mellan deskriptiv och inferentiell statistik",
+                "Vad är en regressionsanalys?"
+            ],
+            "Svår": [
+                "Utför en djupgående statistisk analys av denna data",
+                "Förklara machine learning-algoritmer för prediktiv analys",
+                "Skapa en komplett dataanalysrapport"
+            ]
+        },
+        "Projektledning": {
+            "Lätt": [
+                "Förklara skillnaden mellan en uppgift och ett projekt",
+                "Vad är en Gantt-diagram och hur använder man den?",
+                "Ge exempel på projektledningsverktyg"
+            ],
+            "Medel": [
+                "Skapa en projektplan för en webbutveckling",
+                "Förklara skillnaden mellan vattenfalls- och agil metodik",
+                "Vad är riskhantering i projekt?"
+            ],
+            "Svår": [
+                "Led ett komplext mjukvaruprojekt med agil metodik",
+                "Förklara avancerade projektledningsstrategier",
+                "Analysera och förbättra denna projektprocess"
+            ]
+        }
+    }
+    
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -80,23 +185,44 @@ with st.sidebar:
         step=0.1,
         help="Lägre = mer fokuserat, högre = mer kreativt."
     )
+    st.radio(
+        "Läge",
+        ["Lärläge", "Övningsläge", "Demo/Exempel"],
+        key="mode",
+        help="Välj hur tipsen ska utformas"
+    )
+    st.selectbox(
+        "Ämne",
+        ["Programmering", "Språk", "Matematik", "Design", "Dataanalys", "Projektledning"],
+        key="subject",
+        help="Välj område för tipsen"
+    )
+    st.select_slider(
+        "Svårighetsgrad",
+        options=["Lätt", "Medel", "Svår"],
+        key="difficulty",
+        help="Välj nivå: Lätt för introduktion, Medel för fördjupning, Svår för avancerat."
+    )
 
-st.radio("Läge", ["Lärläge", "Övningsläge"], key="mode", help="Välj hur tipsen ska utformas")
-
-st.selectbox(
-    "Ämne",
-    ["Programmering", "Språk", "Matematik", "Design", "Dataanalys", "Projektledning"],
-)
-
-st.select_slider(
-    "Svårighetsgrad",
-    options=["Lätt", "Medel", "Svår"],
-    key="difficulty",
-    help="Välj nivå: Lätt för introduktion, Medel för fördjupning, Svår för avancerat."
-
-)
-
-
+    if st.session_state.get("mode") == "Demo/Exempel":
+        st.markdown("---")
+        st.subheader("Demo-exempel")
+        
+        demo_examples = get_demo_examples()
+        current_subject = st.session_state.get("subject", "Programmering")
+        current_difficulty = st.session_state.get("difficulty", "Medel")
+        
+        if current_subject in demo_examples and current_difficulty in demo_examples[current_subject]:
+            examples = demo_examples[current_subject][current_difficulty]
+            selected_example = st.selectbox(
+                "Välj exempel:",
+                examples,
+                key="demo_example",
+                help="Välj ett exempel att testa"
+            )
+        else:
+            st.warning("Inga exempel tillgängliga för detta ämne/nivå")
+            selected_example = None
 
 col1, col2 = st.columns([2, 1])
 
@@ -107,6 +233,80 @@ with col1:
             st.write(message["content"])
             if "timestamp" in message:
                 st.caption(f"📅 {message['timestamp']}")
+
+    if st.button("Få tips"):
+        current_mode = st.session_state.get("mode", "Lärläge")
+        current_subject = st.session_state.get("subject", "Programmering")
+        current_difficulty = st.session_state.get("difficulty", "Medel")
+
+        if current_mode == "Demo/Exempel":
+            selected_example = st.session_state.get("demo_example")
+            if selected_example:
+                system_prompt = f"Du är en hjälpsam AI-assistent. Svara på svenska och håll dig konkret och pedagogisk. Användaren har frågat: {selected_example}"
+                user_trigger = selected_example
+            else:
+                st.warning("Välj ett exempel först!")
+                st.stop()
+        else:
+            system_prompt = build_system_prompt(
+                mode=current_mode,
+                subject=current_subject,
+                difficulty=current_difficulty
+            )
+            user_trigger = f"Ge mig tips inom {current_subject} på nivån {current_difficulty}."
+
+        memory.add_message("system", system_prompt)
+        memory.add_message("user", user_trigger)
+
+        timestamp_now = datetime.now().strftime("%H:%M:%S")
+        st.session_state.messages.append({
+            "role": "system",
+            "content": system_prompt,
+            "timestamp": timestamp_now
+        })
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_trigger,
+            "timestamp": timestamp_now
+        })
+
+        with st.chat_message("system"):
+            st.write(system_prompt)
+
+        with st.chat_message("user"):
+            st.write(user_trigger)
+
+        st.session_state.abort_requested = False
+        try:
+            with st.spinner("Tar fram tips..."):
+                llm_handler.update_model_settings(model_name=model, temperature=temp)
+                conversation_history = memory.get_conversation_history()
+
+                if st.button("Avbryt anrop", key="abort_tips_try"):
+                    st.session_state.abort_requested = True
+                    st.warning("Avbryter anrop...")
+                    st.stop()
+
+                response, debug_info = llm_handler.invoke(conversation_history)
+
+                if st.session_state.get("abort_requested", False):
+                    st.warning("Anrop avbrutet av användaren.")
+                    st.stop()
+
+                memory.add_message("assistant", response.content)
+                memory.add_debug_info(debug_info)
+
+                ai_timestamp = datetime.now().strftime("%H:%M:%S")
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response.content,
+                    "timestamp": ai_timestamp
+                })
+                with st.chat_message("assistant"):
+                    st.write(response.content)
+        except Exception as e:
+            with st.chat_message("assistant"):
+                st.error(f"Fel vid tips: {str(e)}")
 
     with st.form("chat_form", clear_on_submit=True):
         user_text = st.text_input("Skriv ditt meddelande…", value="")
