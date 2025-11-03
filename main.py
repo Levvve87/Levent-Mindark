@@ -23,7 +23,7 @@ def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
     if mode == "Lärläge":
         style = (
             "Du är en pedagogisk handledare."
-            "Ge korta, begripliga förklaringar och 1-2 enkla exemperl."
+            "Ge korta, begripliga förklaringar och 1-2 enkla exempel."
             "Belys nyckelgrepp tydligt."
         )
 
@@ -127,7 +127,7 @@ def get_demo_examples():
                 "Vad är skillnaden mellan UX och UI?"
             ],
             "Svår": [
-                "Designa en komplett design system",
+                "Designa ett komplett designsystem",
                 "Förklara design thinking-processen",
                 "Analysera denna designs användarupplevelse"
             ]
@@ -391,7 +391,12 @@ with col1:
             if "timestamp" in message:
                 st.caption(f"{message['timestamp']}")
 
-    if st.button("Få tips"):
+    # Inaktivera knappen i Demo/Exempel-läge om inget exempel är valt
+    disable_get_tips = False
+    if st.session_state.get("mode") == "Demo/Exempel":
+        disable_get_tips = not bool(st.session_state.get("demo_example"))
+
+    if st.button("Få tips", disabled=disable_get_tips):
         system_prompt = get_system_prompt()
         if not system_prompt:
             st.warning("Välj ett exempel först!")
