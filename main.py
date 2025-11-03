@@ -36,6 +36,38 @@ def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
 
     return f"{base} {style }"
 
+def inject_theme_css(is_dark: bool) -> None:
+    """Injicerar enkel tema-CSS baserat på valt läge."""
+    if is_dark:
+        st.markdown(
+            """
+            <style>
+            .stApp { background-color: #0e1117; color: #e5e7eb; }
+            [data-testid="stSidebar"] { background-color: #111827; }
+            [data-testid="stHeader"] { background-color: transparent; }
+            div.stMarkdown, p, span, label { color: #e5e7eb !important; }
+            code, pre { background: #111827 !important; color: #e5e7eb !important; }
+            .stButton>button { background-color: #2563eb; color: #ffffff; border: 1px solid #1d4ed8; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        # Ljust läge (återställ några nyckelfärger)
+        st.markdown(
+            """
+            <style>
+            .stApp { background-color: #ffffff; color: #111827; }
+            [data-testid="stSidebar"] { background-color: #f8fafc; }
+            [data-testid="stHeader"] { background-color: transparent; }
+            div.stMarkdown, p, span, label { color: #111827 !important; }
+            code, pre { background: #f3f4f6 !important; color: #111827 !important; }
+            .stButton>button { background-color: #f0f2f6; color: #111827; border: 1px solid #e5e7eb; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
 def add_message_to_chat(role, content, timestamp=None):
     """Lägger till meddelande i både memory och session_state"""
     memory.add_message(role, content)
@@ -189,6 +221,7 @@ if "debug_info" not in st.session_state:
 st.session_state.setdefault("mode", "Lärläge")
 st.session_state.setdefault("subject", "Programmering")
 st.session_state.setdefault("difficulty", "Medel")
+st.session_state.setdefault("dark_mode", False)
 
 
 for message in st.session_state.messages:
@@ -196,6 +229,11 @@ for message in st.session_state.messages:
 
 with st.sidebar:
     st.header("Modellinställningar")
+    st.toggle(
+        "Mörkt läge",
+        key="dark_mode",
+        help="Växla mellan ljust och mörkt tema"
+    )
     model = st.selectbox(
         "Modell",
         options=["gpt-4o-mini", "gpt-4o"],
@@ -551,3 +589,6 @@ with col2:
             )
         except Exception as e:
             st.warning(f"Kunde inte exportera TXT: {e}")
+
+# Injicera tema-CSS baserat på valet i sidopanelen (längst sist så det överskuggar standardstilar)
+inject_theme_css(st.session_state.get("dark_mode", False))
