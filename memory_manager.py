@@ -9,6 +9,7 @@ class MemoryManager:
     def __init__(self):
         self.messages: List[Dict[str, Any]] = []
         self.debug_info: List[Dict[str, Any]] = []
+        self.feedback_log: List[Dict[str, Any]] = []
     
     def add_message(self, role: str, content: str, timestamp: str = None) -> None:
         if timestamp is None:
@@ -53,3 +54,27 @@ class MemoryManager:
     
     def get_latest_debug_info(self, limit: int = 10) -> List[Dict[str, Any]]:
         return self.debug_info[-limit:] if self.debug_info else []
+
+    def add_feedback(self, message_index: int, rating: str, reason: str = "", message_content: str = "") -> None:
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "message_index": message_index,
+            "rating": rating,  # 'up' | 'down'
+            "reason": reason,
+            "message_content": message_content,
+        }
+        self.feedback_log.append(entry)
+        if len(self.feedback_log) > 200:
+            self.feedback_log.pop(0)
+
+    def get_feedback_log(self, limit: int = 20) -> List[Dict[str, Any]]:
+        return self.feedback_log[-limit:] if self.feedback_log else []
+
+    def get_feedback_summary(self) -> Dict[str, Any]:
+        total_up = sum(1 for f in self.feedback_log if f.get("rating") == "up")
+        total_down = sum(1 for f in self.feedback_log if f.get("rating") == "down")
+        return {
+            "total": len(self.feedback_log),
+            "up": total_up,
+            "down": total_down,
+        }

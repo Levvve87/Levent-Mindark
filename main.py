@@ -88,11 +88,21 @@ def get_system_prompt():
     elif st.session_state.get("mode") == "Demo/Exempel":
         return st.session_state.get("demo_example")
     else:
-        return build_system_prompt(
+        base = build_system_prompt(
             st.session_state.get("mode", "Lärläge"),
             st.session_state.get("subject", "Programmering"),
             st.session_state.get("difficulty", "Medel")
         )
+        # Lägg till en liten hint baserat på historisk feedback
+        try:
+            summary = memory.get_feedback_summary()
+            if summary.get("down", 0) > summary.get("up", 0):
+                base += " Var extra tydlig, konkret och undvik vaga formuleringar."
+            elif summary.get("up", 0) > 0:
+                base += " Behåll den tydliga och hjälpsamma tonen."
+        except Exception:
+            pass
+        return base
 
 def get_demo_examples():
     return {
@@ -423,11 +433,33 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.subheader("Chat")
-    for message in st.session_state.messages:
+    for idx, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.write(message["content"])
             if "timestamp" in message:
                 st.caption(f"{message['timestamp']}")
+            # Feedbackknappar för assistentens svar
+            if message["role"] == "assistant":
+                c1, c2 = st.columns([1,1])
+                with c1:
+                    up_clicked = st.button("👍", key=f"fb_up_{idx}")
+                with c2:
+                    down_clicked = st.button("👎", key=f"fb_down_{idx}")
+                if up_clicked or down_clicked:
+                    st.session_state[f"fb_choice_{idx}"] = "up" if up_clicked else "down"
+                choice = st.session_state.get(f"fb_choice_{idx}")
+                if choice and not st.session_state.get(f"fb_saved_{idx}", False):
+                    with st.expander("Lägg till orsak (valfritt)"):
+                        reason = st.text_area("Varför?", key=f"fb_reason_{idx}", height=80)
+                        if st.button("Spara feedback", key=f"fb_save_{idx}"):
+                            memory.add_feedback(
+                                message_index=idx,
+                                rating=choice,
+                                reason=reason or "",
+                                message_content=message.get("content", "")
+                            )
+                            st.session_state[f"fb_saved_{idx}"] = True
+                            st.success("Tack! Feedback sparad.")
 
     # Inaktivera knappen i Demo/Exempel-läge om inget exempel är valt
     disable_get_tips = False
@@ -557,6 +589,17 @@ with col2:
                 st.json(dbg)
     else:
         st.write("Ingen debug-information ännu. Skicka ett meddelande för att se data.")
+    # Visa en enkel feedbacklogg
+    with st.expander("Feedback-logg"):
+        feedback_entries = memory.get_feedback_log(limit=10)
+        if feedback_entries:
+            for f in feedback_entries:
+                ts = f.get("timestamp", "")
+                rating = "👍" if f.get("rating") == "up" else "👎"
+                reason = f.get("reason", "")
+                st.markdown(f"{rating} `{ts}` — {reason if reason else 'Ingen orsak angiven'}")
+        else:
+            st.caption("Ingen feedback än.")
     if st.button("Rensa chatt"):
         st.session_state.messages.clear()
         st.session_state.debug_info = []
