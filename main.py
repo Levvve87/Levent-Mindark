@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from config import Config
 from memory_manager import MemoryManager
 from llm_handler import LLMHandler
+from feedback_db import init_db, save_feedback, get_feedback_summary, get_recent_feedback, export_feedback_json, export_feedback_csv
+import uuid
 
 def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
     mode = mode or "Lärläge"
@@ -69,8 +71,7 @@ def inject_theme_css(is_dark: bool) -> None:
         )
 
 def add_message_to_chat(role, content, timestamp=None):
-    """Lägger till meddelande i både memory och session_state"""
-    memory.add_message(role, content)
+    """Lägger till meddelande i session_state (source of truth)"""
     if not timestamp:
         timestamp = datetime.now().strftime("%H:%M:%S")
     st.session_state.messages.append({
@@ -78,6 +79,10 @@ def add_message_to_chat(role, content, timestamp=None):
         "content": content,
         "timestamp": timestamp
     })
+
+def get_conversation_history():
+    """Hämtar konversationshistorik från session_state för LLM-anrop"""
+    return [{"role": msg["role"], "content": msg["content"]} for msg in st.session_state.messages]
 
 def get_system_prompt():
     """Hämtar systemprompt baserat på vald mode/prompt"""
@@ -95,7 +100,7 @@ def get_system_prompt():
         )
         # Lägg till en liten hint baserat på historisk feedback
         try:
-            summary = memory.get_feedback_summary()
+            summary = get_feedback_summary(st.session_state.db_conn)
             if summary.get("down", 0) > summary.get("up", 0):
                 base += " Var extra tydlig, konkret och undvik vaga formuleringar."
             elif summary.get("up", 0) > 0:
@@ -223,6 +228,11 @@ st.title("AI-chat med debugpanel")
 memory = MemoryManager()
 llm_handler = LLMHandler()
 
+if "db_conn" not in st.session_state:
+    st.session_state.db_conn = init_db("feedback.db")
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = str(uuid.uuid4())
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "debug_info" not in st.session_state:
@@ -232,10 +242,6 @@ st.session_state.setdefault("mode", "Lärläge")
 st.session_state.setdefault("subject", "Programmering")
 st.session_state.setdefault("difficulty", "Medel")
 st.session_state.setdefault("dark_mode", False)
-
-
-for message in st.session_state.messages:
-    memory.add_message(message["role"], message["content"])
 
 with st.sidebar:
     st.header("Modellinställningar")
@@ -458,6 +464,15 @@ with col1:
                                 reason=reason or "",
                                 message_content=message.get("content", "")
                             )
+                            save_feedback(
+                                st.session_state.db_conn,
+                                conversation_id=st.session_state.conversation_id,
+                                message_index=idx,
+                                role=message.get("role", "assistant"),
+                                rating=choice,
+                                reason=reason or "",
+                                message_content=message.get("content", "")
+                            )
                             st.session_state[f"fb_saved_{idx}"] = True
                             st.success("Tack! Feedback sparad.")
 
@@ -486,7 +501,7 @@ with col1:
         try:
             with st.spinner("Tar fram tips..."):
                 llm_handler.update_model_settings(model_name=model, temperature=temp)
-                conversation_history = memory.get_conversation_history()
+                conversation_history = get_conversation_history()
 
                 if st.button("Avbryt anrop", key="abort_tips_try"):
                     st.session_state.abort_requested = True
@@ -519,7 +534,7 @@ with col1:
         with st.spinner("Tänker..."):
             try:
                 llm_handler.update_model_settings(model_name=model, temperature=temp)
-                conversation_history = memory.get_conversation_history()
+                conversation_history = get_conversation_history()
                 if st.button("Avbryt anrop", key="abort_button"):
                     st.session_state.abort_requested = True
                     st.warning("Avbryter anrop...")
@@ -591,19 +606,22 @@ with col2:
         st.write("Ingen debug-information ännu. Skicka ett meddelande för att se data.")
     # Visa en enkel feedbacklogg
     with st.expander("Feedback-logg"):
-        feedback_entries = memory.get_feedback_log(limit=10)
-        if feedback_entries:
-            for f in feedback_entries:
-                ts = f.get("timestamp", "")
-                rating = "👍" if f.get("rating") == "up" else "👎"
-                reason = f.get("reason", "")
-                st.markdown(f"{rating} `{ts}` — {reason if reason else 'Ingen orsak angiven'}")
-        else:
-            st.caption("Ingen feedback än.")
+        try:
+            feedback_rows = get_recent_feedback(st.session_state.db_conn, limit=10)
+            if feedback_rows:
+                for row in feedback_rows:
+                    # row format: (id, conversation_id, message_index, role, rating, reason, message_content, created_at)
+                    ts = row[7] if len(row) > 7 else ""
+                    rating = "👍" if row[4] == "up" else "👎"
+                    reason = row[5] if len(row) > 5 else ""
+                    st.markdown(f"{rating} `{ts}` — {reason if reason else 'Ingen orsak angiven'}")
+            else:
+                st.caption("Ingen feedback än.")
+        except Exception as e:
+            st.caption(f"Kunde inte ladda feedback: {e}")
     if st.button("Rensa chatt"):
         st.session_state.messages.clear()
         st.session_state.debug_info = []
-        memory.clear_messages()
         memory.clear_debug_info()
         st.success("Chatt rensad!")
     if st.button("Avbryt pågående anrop"):
@@ -623,15 +641,53 @@ with col2:
         else:
             st.warning("Inga meddelanden att exportera.")
     if st.button("Exportera TXT"):
-        try:
-            txt_data = memory.export_messages(format="txt")
+        if st.session_state.messages:
+            result = []
+            for msg in st.session_state.messages:
+                timestamp = msg.get("timestamp", "Okänt tid")
+                role = msg["role"].upper()
+                content = msg["content"]
+                result.append(f"[{timestamp}] {role}: {content}")
+            txt_data = "\n".join(result)
             st.download_button(
                 label="Ladda ner chatt som TXT",
                 data=txt_data,
                 file_name=f"chatt_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt",
             )
+        else:
+            st.warning("Inga meddelanden att exportera.")
+    if st.button("Exportera feedback-databas"):
+        try:
+            json_data = export_feedback_json(st.session_state.db_conn)
+            st.download_button(
+                label="Ladda ner feedback som JSON",
+                data=json_data,
+                file_name=f"feedback_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json",
+                mime="application/json"
+            )
+            csv_data = export_feedback_csv(st.session_state.db_conn)
+            st.download_button(
+                label="Ladda ner feedback som CSV",
+                data=csv_data,
+                file_name=f"feedback_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
+                mime="text/csv"
+            )
         except Exception as e:
-            st.warning(f"Kunde inte exportera TXT: {e}")
+            st.warning(f"Kunde inte exportera feedback: {e}")
+    if st.button("Exportera SQLite-databas"):
+        try:
+            with open("feedback.db", "rb") as f:
+                db_data = f.read()
+            st.download_button(
+                label="Ladda ner feedback.db",
+                data=db_data,
+                file_name=f"feedback_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.db",
+                mime="application/x-sqlite3"
+            )
+        except FileNotFoundError:
+            st.warning("Databasfilen hittades inte.")
+        except Exception as e:
+            st.warning(f"Kunde inte exportera databas: {e}")
 
 # Injicera tema-CSS baserat på valet i sidopanelen (längst sist så det överskuggar standardstilar)
 inject_theme_css(st.session_state.get("dark_mode", False))
