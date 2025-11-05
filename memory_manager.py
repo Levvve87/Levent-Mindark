@@ -1,8 +1,8 @@
- 
-
+# IMPORTER
 from datetime import datetime
 from typing import List, Dict, Any
 
+# MEMORYMANAGER - DEBUG & FEEDBACK (BACKUP)
 class MemoryManager:
     
     def __init__(self):
