@@ -1,9 +1,10 @@
- 
-
+# IMPORTER
 import time 
 from typing import Dict, Any, Optional, Tuple  
 from langchain_openai import ChatOpenAI  
-from config import Config  
+from config import Config
+
+# LLMHANDLER - OPENAI-INTEGRATION
 class LLMHandler:
     
     def __init__(self, model_name: str = None, temperature: float = None):

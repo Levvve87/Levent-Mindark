@@ -1,4 +1,4 @@
-
+# IMPORTER
 import os
 import json
 import streamlit as st
@@ -8,9 +8,10 @@ from dotenv import load_dotenv
 from config import Config
 from memory_manager import MemoryManager
 from llm_handler import LLMHandler
-from feedback_db import init_db, save_feedback, get_feedback_summary, get_recent_feedback, export_feedback_json, export_feedback_csv
+from feedback_db import init_db, save_feedback, get_feedback_summary, get_recent_feedback, export_feedback_json, export_feedback_csv, save_message, load_messages, create_or_update_conversation, delete_messages, delete_conversation, get_all_conversations, save_prompt, get_all_prompts, delete_prompt
 import uuid
 
+# HJÄLPFUNKTIONER - SYSTEMPROMPTS
 def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
     mode = mode or "Lärläge"
     subject = subject or "Allmänt"
@@ -36,10 +37,10 @@ def build_system_prompt(mode: str, subject: str, difficulty: str) -> str:
             "Lägg till kort återkopplingstips efter varje övning."
         )
 
-    return f"{base} {style }"
+    return f"{base} {style}"
 
+# HJÄLPFUNKTIONER - UI & TEMA
 def inject_theme_css(is_dark: bool) -> None:
-    """Injicerar enkel tema-CSS baserat på valt läge."""
     if is_dark:
         st.markdown(
             """
@@ -55,7 +56,6 @@ def inject_theme_css(is_dark: bool) -> None:
             unsafe_allow_html=True,
         )
     else:
-        # Ljust läge (återställ några nyckelfärger)
         st.markdown(
             """
             <style>
@@ -70,22 +70,94 @@ def inject_theme_css(is_dark: bool) -> None:
             unsafe_allow_html=True,
         )
 
+# HJÄLPFUNKTIONER - MEDDELANDEN & KONVERSATION
 def add_message_to_chat(role, content, timestamp=None):
-    """Lägger till meddelande i session_state (source of truth)"""
     if not timestamp:
         timestamp = datetime.now().strftime("%H:%M:%S")
-    st.session_state.messages.append({
+    message = {
         "role": role,
         "content": content,
         "timestamp": timestamp
-    })
+    }
+    st.session_state.messages.append(message)
+    if "db_conn" in st.session_state and "conversation_id" in st.session_state:
+        try:
+            create_or_update_conversation(st.session_state.db_conn, st.session_state.conversation_id)
+            save_message(
+                st.session_state.db_conn,
+                conversation_id=st.session_state.conversation_id,
+                role=role,
+                content=content,
+                timestamp=timestamp
+            )
+        except Exception as e:
+            st.warning(f"Kunde inte spara meddelande i databas: {e}")
 
 def get_conversation_history():
-    """Hämtar konversationshistorik från session_state för LLM-anrop"""
     return [{"role": msg["role"], "content": msg["content"]} for msg in st.session_state.messages]
 
+# HJÄLPFUNKTIONER - STATE INITIERING
+def init_session_state():
+    if "db_conn" not in st.session_state:
+        st.session_state.db_conn = init_db("feedback.db")
+    
+    if "conversation_id" not in st.session_state:
+        st.session_state.conversation_id = str(uuid.uuid4())
+        try:
+            messages = load_messages(st.session_state.db_conn, st.session_state.conversation_id)
+            st.session_state.messages = messages if messages else []
+        except Exception:
+            st.session_state.messages = []
+    else:
+        if "messages" not in st.session_state:
+            try:
+                messages = load_messages(st.session_state.db_conn, st.session_state.conversation_id)
+                st.session_state.messages = messages if messages else []
+            except Exception:
+                st.session_state.messages = []
+    
+    if "debug_info" not in st.session_state:
+        st.session_state.debug_info = []
+    
+    st.session_state.setdefault("mode", "Lärläge")
+    st.session_state.setdefault("subject", "Programmering")
+    st.session_state.setdefault("difficulty", "Medel")
+    st.session_state.setdefault("dark_mode", False)
+    
+    if "saved_prompts" not in st.session_state:
+        try:
+            prompts = get_all_prompts(st.session_state.db_conn)
+            st.session_state.saved_prompts = {p["name"]: {"content": p["content"], "description": p["description"]} for p in prompts}
+        except Exception:
+            st.session_state.saved_prompts = {}
+
+# HJÄLPFUNKTIONER - LLM ANROP
+def handle_llm_request(model_name: str, temperature: float, prompt_text: str = None, system_message: str = None):
+    st.session_state.abort_requested = False
+    try:
+        spinner_text = "Tar fram tips..." if prompt_text else "Tänker..."
+        with st.spinner(spinner_text):
+            llm_handler.update_model_settings(model_name=model_name, temperature=temperature)
+            conversation_history = get_conversation_history()
+            system_prompt_text = system_message or get_system_prompt()
+            response, debug_info = llm_handler.invoke(conversation_history, system_message=system_prompt_text)
+            
+            if st.session_state.get("abort_requested", False):
+                st.warning("Anrop avbrutet av användaren.")
+                st.stop()
+            
+            add_message_to_chat("assistant", response.content)
+            memory.add_debug_info(debug_info)
+            with st.chat_message("assistant"):
+                st.write(response.content)
+            return True
+    except Exception as e:
+        with st.chat_message("assistant"):
+            st.error(f"Fel vid AI-anrop: {str(e)}")
+        return False
+
+# HJÄLPFUNKTIONER - PROMPTS & EXEMPEL
 def get_system_prompt():
-    """Hämtar systemprompt baserat på vald mode/prompt"""
     selected_saved_prompt = st.session_state.get("selected_saved_prompt", "Ingen prompt vald")
     
     if selected_saved_prompt != "Ingen prompt vald" and selected_saved_prompt in st.session_state.saved_prompts:
@@ -98,7 +170,6 @@ def get_system_prompt():
             st.session_state.get("subject", "Programmering"),
             st.session_state.get("difficulty", "Medel")
         )
-        # Lägg till en liten hint baserat på historisk feedback
         try:
             summary = get_feedback_summary(st.session_state.db_conn)
             if summary.get("down", 0) > summary.get("up", 0):
@@ -214,8 +285,8 @@ def get_demo_examples():
             ]
         }
     }
-    
 
+# INITIERING - API-KEY & KONFIGURATION
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
@@ -228,21 +299,10 @@ st.title("AI-chat med debugpanel")
 memory = MemoryManager()
 llm_handler = LLMHandler()
 
-if "db_conn" not in st.session_state:
-    st.session_state.db_conn = init_db("feedback.db")
-if "conversation_id" not in st.session_state:
-    st.session_state.conversation_id = str(uuid.uuid4())
+# INITIERING - DATABAS & STATE
+init_session_state()
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "debug_info" not in st.session_state:
-    st.session_state.debug_info = []
-
-st.session_state.setdefault("mode", "Lärläge")
-st.session_state.setdefault("subject", "Programmering")
-st.session_state.setdefault("difficulty", "Medel")
-st.session_state.setdefault("dark_mode", False)
-
+# SIDOPANEL - INSTÄLLNINGAR & KONFIGURATION
 with st.sidebar:
     st.header("Modellinställningar")
     st.toggle(
@@ -305,10 +365,40 @@ with st.sidebar:
             selected_example = None
 
     st.markdown("---")
-    st.subheader("Prompt Builder")
+    st.subheader("Konversationer")
     
-    if "saved_prompts" not in st.session_state:
-        st.session_state.saved_prompts = {}
+    try:
+        conversations = get_all_conversations(st.session_state.db_conn)
+        if conversations:
+            conv_options = [f"{conv['id'][:8]}... ({conv['updated_at'][:10]})" for conv in conversations]
+            conv_options.insert(0, "Ny konversation")
+            selected_conv = st.selectbox("Välj konversation:", conv_options, key="conv_selector")
+            
+            if selected_conv != "Ny konversation":
+                selected_id = conversations[conv_options.index(selected_conv) - 1]["id"]
+                if st.button("Ladda konversation", key="load_conv"):
+                    st.session_state.conversation_id = selected_id
+                    messages = load_messages(st.session_state.db_conn, selected_id)
+                    st.session_state.messages = messages if messages else []
+                    st.rerun()
+                if st.button("Ta bort konversation", key="delete_conv"):
+                    delete_conversation(st.session_state.db_conn, selected_id)
+                    if st.session_state.conversation_id == selected_id:
+                        st.session_state.conversation_id = str(uuid.uuid4())
+                        st.session_state.messages = []
+                    st.rerun()
+            else:
+                if st.button("Starta ny konversation", key="new_conv"):
+                    st.session_state.conversation_id = str(uuid.uuid4())
+                    st.session_state.messages = []
+                    st.rerun()
+        else:
+            st.info("Inga konversationer än. Starta en ny chatt!")
+    except Exception as e:
+        st.caption(f"Kunde inte ladda konversationer: {e}")
+
+    st.markdown("---")
+    st.subheader("Prompt Builder")
     
     st.caption("Spara och hantera dina egna prompts")
 
@@ -334,11 +424,15 @@ with st.sidebar:
             
             if save_button:
                 if prompt_name and prompt_content:
-                    st.session_state.saved_prompts[prompt_name] = {
-                        "content": prompt_content,
-                        "description": prompt_description or ""
-                    }
-                    st.success(f"Prompt '{prompt_name}' sparad!")
+                    try:
+                        save_prompt(st.session_state.db_conn, prompt_name, prompt_content, prompt_description or "")
+                        st.session_state.saved_prompts[prompt_name] = {
+                            "content": prompt_content,
+                            "description": prompt_description or ""
+                        }
+                        st.success(f"Prompt '{prompt_name}' sparad!")
+                    except Exception as e:
+                        st.error(f"Kunde inte spara prompt: {e}")
                 else:
                     st.error("Namn och innehåll krävs!")
 
@@ -375,11 +469,15 @@ with st.sidebar:
                 col1, col2 = st.columns([1, 1])
                 with col1:
                     if st.button("Ja, ta bort", key=f"confirm_yes_{selected_prompt}"):
-                        del st.session_state.saved_prompts[selected_prompt]
-                        st.session_state[f"confirm_delete_{selected_prompt}"] = False
-                        st.session_state.selected_saved_prompt = "Ingen prompt vald"
-                        st.success(f"Prompt '{selected_prompt}' borttagen!")
-                        st.rerun()
+                        try:
+                            delete_prompt(st.session_state.db_conn, selected_prompt)
+                            del st.session_state.saved_prompts[selected_prompt]
+                            st.session_state[f"confirm_delete_{selected_prompt}"] = False
+                            st.session_state.selected_saved_prompt = "Ingen prompt vald"
+                            st.success(f"Prompt '{selected_prompt}' borttagen!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Kunde inte ta bort prompt: {e}")
                 with col2:
                     if st.button("Avbryt", key=f"confirm_no_{selected_prompt}"):
                         st.session_state[f"confirm_delete_{selected_prompt}"] = False
@@ -413,19 +511,21 @@ with st.sidebar:
                     
                     if save_edit:
                         if new_name and new_content:
-                            # Ta bort gamla prompten om namnet ändrats
-                            if new_name != selected_prompt:
-                                del st.session_state.saved_prompts[selected_prompt]
-                            
-                            # Lägg till den uppdaterade prompten
-                            st.session_state.saved_prompts[new_name] = {
-                                "content": new_content,
-                                "description": new_description or ""
-                            }
-                            st.session_state[f"editing_{selected_prompt}"] = False
-                            st.session_state.selected_saved_prompt = new_name
-                            st.success(f"Prompt uppdaterad som '{new_name}'!")
-                            st.rerun()
+                            try:
+                                if new_name != selected_prompt:
+                                    delete_prompt(st.session_state.db_conn, selected_prompt)
+                                    del st.session_state.saved_prompts[selected_prompt]
+                                save_prompt(st.session_state.db_conn, new_name, new_content, new_description or "")
+                                st.session_state.saved_prompts[new_name] = {
+                                    "content": new_content,
+                                    "description": new_description or ""
+                                }
+                                st.session_state[f"editing_{selected_prompt}"] = False
+                                st.session_state.selected_saved_prompt = new_name
+                                st.success(f"Prompt uppdaterad som '{new_name}'!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Kunde inte uppdatera prompt: {e}")
                         else:
                             st.error("Namn och innehåll krävs!")
                     
@@ -435,6 +535,7 @@ with st.sidebar:
     else:
         st.info("Inga sparade prompts än. Spara din första prompt ovan!")
 
+# HUVUDINNEHÅLL - CHATT & DEBUG
 col1, col2 = st.columns([2, 1])
 
 with col1:
@@ -444,7 +545,6 @@ with col1:
             st.write(message["content"])
             if "timestamp" in message:
                 st.caption(f"{message['timestamp']}")
-            # Feedbackknappar för assistentens svar
             if message["role"] == "assistant":
                 c1, c2 = st.columns([1,1])
                 with c1:
@@ -458,12 +558,6 @@ with col1:
                     with st.expander("Lägg till orsak (valfritt)"):
                         reason = st.text_area("Varför?", key=f"fb_reason_{idx}", height=80)
                         if st.button("Spara feedback", key=f"fb_save_{idx}"):
-                            memory.add_feedback(
-                                message_index=idx,
-                                rating=choice,
-                                reason=reason or "",
-                                message_content=message.get("content", "")
-                            )
                             save_feedback(
                                 st.session_state.db_conn,
                                 conversation_id=st.session_state.conversation_id,
@@ -476,7 +570,6 @@ with col1:
                             st.session_state[f"fb_saved_{idx}"] = True
                             st.success("Tack! Feedback sparad.")
 
-    # Inaktivera knappen i Demo/Exempel-läge om inget exempel är valt
     disable_get_tips = False
     if st.session_state.get("mode") == "Demo/Exempel":
         disable_get_tips = not bool(st.session_state.get("demo_example"))
@@ -490,37 +583,8 @@ with col1:
         user_trigger = system_prompt
         add_message_to_chat("system", f"Du är en hjälpsam AI-assistent. Svara på svenska och håll dig konkret och pedagogisk. Användaren har frågat: {system_prompt}")
         add_message_to_chat("user", user_trigger)
-
-        with st.chat_message("system"):
-            st.write(f"Du är en hjälpsam AI-assistent. Svara på svenska och håll dig konkret och pedagogisk. Användaren har frågat: {system_prompt}")
-
-        with st.chat_message("user"):
-            st.write(user_trigger)
-
-        st.session_state.abort_requested = False
-        try:
-            with st.spinner("Tar fram tips..."):
-                llm_handler.update_model_settings(model_name=model, temperature=temp)
-                conversation_history = get_conversation_history()
-
-                if st.button("Avbryt anrop", key="abort_tips_try"):
-                    st.session_state.abort_requested = True
-                    st.warning("Avbryter anrop...")
-                    st.stop()
-
-                response, debug_info = llm_handler.invoke(conversation_history)
-
-                if st.session_state.get("abort_requested", False):
-                    st.warning("Anrop avbrutet av användaren.")
-                    st.stop()
-
-            add_message_to_chat("assistant", response.content)
-            memory.add_debug_info(debug_info)
-            with st.chat_message("assistant"):
-                st.write(response.content)
-        except Exception as e:
-            with st.chat_message("assistant"):
-                st.error(f"Fel vid tips: {str(e)}")
+        
+        handle_llm_request(model, temp, prompt_text=user_trigger, system_message=system_prompt)
 
     with st.form("chat_form", clear_on_submit=True):
         user_text = st.text_input("Skriv ditt meddelande…", value="")
@@ -530,27 +594,9 @@ with col1:
         add_message_to_chat("user", user_text)
         with st.chat_message("user"):
             st.write(user_text)
-        st.session_state.abort_requested = False
-        with st.spinner("Tänker..."):
-            try:
-                llm_handler.update_model_settings(model_name=model, temperature=temp)
-                conversation_history = get_conversation_history()
-                if st.button("Avbryt anrop", key="abort_button"):
-                    st.session_state.abort_requested = True
-                    st.warning("Avbryter anrop...")
-                    st.stop()
-                response, debug_info = llm_handler.invoke(conversation_history)
-                if st.session_state.get("abort_requested", False):
-                    st.warning("Anrop avbrutet av användaren.")
-                    st.stop()
-                add_message_to_chat("assistant", response.content)
-                memory.add_debug_info(debug_info)
-                with st.chat_message("assistant"):
-                    st.write(response.content)
-            except Exception as e:
-                with st.chat_message("assistant"):
-                    st.error(f"Fel vid AI-anrop: {str(e)}")
+        handle_llm_request(model, temp)
 
+# DEBUGPANEL - DEBUG-INFO & EXPORTER
 with col2:
     st.subheader("Debug Panel")
     latest_list = memory.get_latest_debug_info(limit=1)
@@ -604,13 +650,11 @@ with col2:
                 st.json(dbg)
     else:
         st.write("Ingen debug-information ännu. Skicka ett meddelande för att se data.")
-    # Visa en enkel feedbacklogg
     with st.expander("Feedback-logg"):
         try:
             feedback_rows = get_recent_feedback(st.session_state.db_conn, limit=10)
             if feedback_rows:
                 for row in feedback_rows:
-                    # row format: (id, conversation_id, message_index, role, rating, reason, message_content, created_at)
                     ts = row[7] if len(row) > 7 else ""
                     rating = "👍" if row[4] == "up" else "👎"
                     reason = row[5] if len(row) > 5 else ""
@@ -620,10 +664,14 @@ with col2:
         except Exception as e:
             st.caption(f"Kunde inte ladda feedback: {e}")
     if st.button("Rensa chatt"):
-        st.session_state.messages.clear()
-        st.session_state.debug_info = []
-        memory.clear_debug_info()
-        st.success("Chatt rensad!")
+        try:
+            delete_messages(st.session_state.db_conn, st.session_state.conversation_id)
+            st.session_state.messages.clear()
+            st.session_state.debug_info = []
+            memory.clear_debug_info()
+            st.success("Chatt rensad!")
+        except Exception as e:
+            st.error(f"Kunde inte rensa chatt: {e}")
     if st.button("Avbryt pågående anrop"):
         if st.session_state.get("abort_requested", False):
             st.info("Inget pågående anrop att avbryta.")
@@ -689,5 +737,5 @@ with col2:
         except Exception as e:
             st.warning(f"Kunde inte exportera databas: {e}")
 
-# Injicera tema-CSS baserat på valet i sidopanelen (längst sist så det överskuggar standardstilar)
+# TEMA - APPLICERA CSS
 inject_theme_css(st.session_state.get("dark_mode", False))
