@@ -5,7 +5,6 @@ import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
 
-from config import Config
 from memory_manager import MemoryManager
 from llm_handler import LLMHandler
 from feedback_db import init_db, save_feedback, get_feedback_summary, get_recent_feedback, export_feedback_json, export_feedback_csv, save_message, load_messages, create_or_update_conversation, delete_messages, delete_conversation, get_all_conversations, save_prompt, get_all_prompts, delete_prompt
@@ -116,8 +115,7 @@ def init_session_state():
             except Exception:
                 st.session_state.messages = []
     
-    if "debug_info" not in st.session_state:
-        st.session_state.debug_info = []
+    # debug_info i sessionen används inte längre
     
     st.session_state.setdefault("mode", "Lärläge")
     st.session_state.setdefault("subject", "Programmering")
@@ -680,7 +678,6 @@ with col2:
         try:
             delete_messages(st.session_state.db_conn, st.session_state.conversation_id)
             st.session_state.messages.clear()
-            st.session_state.debug_info = []
             memory.clear_debug_info()
             st.success("Chatt rensad!")
         except Exception as e:
