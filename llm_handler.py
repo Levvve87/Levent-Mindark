@@ -1,6 +1,6 @@
 # IMPORTER
 import time 
-from typing import Dict, Any, Tuple  
+from typing import Dict, Any  
 from langchain_openai import ChatOpenAI  
 from config import Config
 
@@ -31,8 +31,6 @@ class LLMHandler:
             self.temperature = temperature
         
         self._initialize_model()
-    
-    # invoke borttagen – endast streaming används nu
 
     def stream(self, messages: list, system_message: str = None):
         start_time = time.time()
@@ -73,15 +71,6 @@ class LLMHandler:
             debug_info["error_type"] = type(e).__name__
             yield {"type": "error", "error": str(e), "debug": debug_info}
     
-    def get_available_models(self) -> list:
-        return [
-            "gpt-4o-mini",
-            "gpt-4o",
-            "gpt-3.5-turbo",
-            "gpt-4",
-            "gpt-4-turbo"
-        ]
-
     # STREAMING-WRAPPER MED MODELLINSTÄLLNINGAR
     def stream_with_settings(self, *, model_name: str, temperature: float, messages: list, system_message: str = None):
         self.update_model_settings(model_name=model_name, temperature=temperature)

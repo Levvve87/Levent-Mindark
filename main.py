@@ -1,6 +1,5 @@
 # IMPORTER
 import os
-import json
 import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
@@ -12,7 +11,6 @@ from debugpanel import render_debug_panel
 from feedback_db import init_db, save_feedback, get_feedback_summary, save_message, load_messages, create_or_update_conversation, delete_messages, get_all_prompts
 from prompt import get_system_prompt as get_system_prompt_from_prompt
 import uuid
-
 
 # HJÄLPFUNKTIONER - MEDDELANDEN & KONVERSATION
 def add_message_to_chat(role, content, timestamp=None):
@@ -59,8 +57,6 @@ def init_session_state():
                 st.session_state.messages = messages if messages else []
             except Exception:
                 st.session_state.messages = []
-    
-    # debug_info i sessionen används inte längre
 
     st.session_state.setdefault("subject", "Programmering")
     st.session_state.setdefault("difficulty", "Medel")
@@ -73,7 +69,6 @@ def init_session_state():
             st.session_state.saved_prompts = {}
 
 # HJÄLPFUNKTIONER - LLM ANROP
-
 def handle_llm_request(model_name: str, temperature: float, system_message: str = None):
     st.session_state.abort_requested = False
     try:
@@ -144,7 +139,6 @@ if not OPENAI_API_KEY:
     st.stop()
 
 st.set_page_config(page_title="AI-chat", layout="wide")
-
 
 memory = MemoryManager()
 llm_handler = LLMHandler()
