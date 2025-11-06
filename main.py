@@ -135,22 +135,35 @@ def init_session_state():
 def handle_llm_request(model_name: str, temperature: float, prompt_text: str = None, system_message: str = None):
     st.session_state.abort_requested = False
     try:
-        spinner_text = "Tar fram tips..." if prompt_text else "Tänker..."
-        with st.spinner(spinner_text):
-            llm_handler.update_model_settings(model_name=model_name, temperature=temperature)
-            conversation_history = get_conversation_history()
-            system_prompt_text = system_message or get_system_prompt()
-            response, debug_info = llm_handler.invoke(conversation_history, system_message=system_prompt_text)
-            
-            if st.session_state.get("abort_requested", False):
-                st.warning("Anrop avbrutet av användaren.")
-                st.stop()
-            
-            add_message_to_chat("assistant", response.content)
-            memory.add_debug_info(debug_info)
-            with st.chat_message("assistant"):
-                st.write(response.content)
+        llm_handler.update_model_settings(model_name=model_name, temperature=temperature)
+        conversation_history = get_conversation_history()
+        system_prompt_text = system_message or get_system_prompt()
+
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            accumulated = ""
+            for event in llm_handler.stream(conversation_history, system_message=system_prompt_text):
+                if st.session_state.get("abort_requested", False):
+                    st.warning("Anrop avbrutet av användaren.")
+                    break
+                if event.get("type") == "token":
+                    accumulated += event.get("text", "")
+                    placeholder.write(accumulated)
+                elif event.get("type") == "done":
+                    accumulated = event.get("text", accumulated)
+                    placeholder.write(accumulated)
+                    debug_info = event.get("debug", {})
+                    memory.add_debug_info(debug_info)
+                elif event.get("type") == "error":
+                    debug_info = event.get("debug", {})
+                    memory.add_debug_info(debug_info)
+                    st.error(f"Fel vid AI-anrop: {event.get('error')}")
+                    return False
+
+        if accumulated:
+            add_message_to_chat("assistant", accumulated)
             return True
+        return False
     except Exception as e:
         with st.chat_message("assistant"):
             st.error(f"Fel vid AI-anrop: {str(e)}")
