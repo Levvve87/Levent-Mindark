@@ -81,3 +81,8 @@ class LLMHandler:
             "gpt-4",
             "gpt-4-turbo"
         ]
+
+    # STREAMING-WRAPPER MED MODELLINSTÄLLNINGAR
+    def stream_with_settings(self, *, model_name: str, temperature: float, messages: list, system_message: str = None):
+        self.update_model_settings(model_name=model_name, temperature=temperature)
+        return self.stream(messages, system_message=system_message)

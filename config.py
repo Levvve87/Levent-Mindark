@@ -11,6 +11,7 @@ class Config:
     PAGE_LAYOUT = "wide"
     DEBUG_PANEL_WIDTH = 400
     MAX_DEBUG_ENTRIES = 50
+    ENABLE_DANGEROUS_ACTIONS = os.getenv("ENABLE_DANGEROUS_ACTIONS", "false").lower() == "true"
     ERROR_MESSAGES = {
         "no_api_key": "API-nyckel saknas! Kontrollera din .env-fil.",
         "api_error": "Fel vid API-anrop:",
