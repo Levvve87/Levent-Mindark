@@ -15,7 +15,11 @@ def render_conversations_sidebar(db_conn) -> None:
             selected_conv = st.selectbox("Välj konversation:", conv_options, key="conv_selector")
 
             if selected_conv != "Ny konversation":
-                selected_id = conversations[conv_options.index(selected_conv) - 1]["id"]
+                try:
+                    selected_id = conversations[conv_options.index(selected_conv) - 1]["id"]
+                except (IndexError, ValueError):
+                    st.error("Fel vid val av konversation.")
+                    return
                 if st.button("Ladda konversation", key="load_conv"):
                     st.session_state.conversation_id = selected_id
                     messages = load_messages(db_conn, selected_id)

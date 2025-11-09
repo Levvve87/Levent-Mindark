@@ -8,12 +8,14 @@ from memory_manager import MemoryManager
 from llm_handler import LLMHandler
 from ui_conversations import render_conversations_sidebar
 from debugpanel import render_debug_panel
-from feedback_db import init_db, save_feedback, get_feedback_summary, save_message, load_messages, create_or_update_conversation, delete_messages, get_all_prompts
+from feedback_db import init_db, save_feedback, get_feedback_summary, save_message, load_messages, create_or_update_conversation, get_all_prompts
 from prompt import get_system_prompt as get_system_prompt_from_prompt
 import uuid
 
 # HJÄLPFUNKTIONER - MEDDELANDEN & KONVERSATION
 def add_message_to_chat(role, content, timestamp=None):
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
     if not timestamp:
         timestamp = datetime.now().strftime("%H:%M:%S")
     message = {
@@ -36,6 +38,8 @@ def add_message_to_chat(role, content, timestamp=None):
             st.warning(f"Kunde inte spara meddelande i databas: {e}")
 
 def get_conversation_history():
+    if "messages" not in st.session_state or not st.session_state.messages:
+        return []
     return [{"role": msg["role"], "content": msg["content"]} for msg in st.session_state.messages]
 
 # HJÄLPFUNKTIONER - STATE INITIERING
@@ -119,7 +123,8 @@ def get_system_prompt():
     
     feedback_summary = None
     try:
-        feedback_summary = get_feedback_summary(st.session_state.db_conn)
+        if "db_conn" in st.session_state:
+            feedback_summary = get_feedback_summary(st.session_state.db_conn)
     except Exception:
         pass
     
@@ -177,9 +182,11 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    render_conversations_sidebar(st.session_state.db_conn)
+    if "db_conn" in st.session_state:
+        render_conversations_sidebar(st.session_state.db_conn)
     st.markdown("---")
-    render_debug_panel(memory, st.session_state.db_conn)
+    if "db_conn" in st.session_state:
+        render_debug_panel(memory, st.session_state.db_conn)
 
 # HUVUDINNEHÅLL - CHATT
 st.title("Levent's AI Lärare")
@@ -190,6 +197,8 @@ if user_text:
 
 # Container som håller chattmeddelandena
 with st.container():
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
     for idx, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.write(message["content"])
@@ -203,32 +212,40 @@ with st.container():
                     stars = st.feedback("stars", key=f"fb_stars_{idx}")
 
                 if thumbs is not None and not st.session_state.get(f"fb_thumbs_saved_{idx}", False):
-                    save_feedback(
-                        st.session_state.db_conn,
-                        conversation_id=st.session_state.conversation_id,
-                        message_index=idx,
-                        role=message.get("role", "assistant"),
-                        rating_type="thumbs",
-                        rating_value=1 if thumbs == 1 else -1,
-                        reason="",
-                        message_content=message.get("content", "")
-                    )
-                    st.session_state[f"fb_thumbs_saved_{idx}"] = True
-                    st.toast("✅ Tack för din feedback!")
+                    if "db_conn" in st.session_state and "conversation_id" in st.session_state:
+                        try:
+                            save_feedback(
+                                st.session_state.db_conn,
+                                conversation_id=st.session_state.conversation_id,
+                                message_index=idx,
+                                role=message.get("role", "assistant"),
+                                rating_type="thumbs",
+                                rating_value=1 if thumbs == 1 else -1,
+                                reason="",
+                                message_content=message.get("content", "")
+                            )
+                            st.session_state[f"fb_thumbs_saved_{idx}"] = True
+                            st.toast("✅ Tack för din feedback!")
+                        except Exception as e:
+                            st.warning(f"Kunde inte spara feedback: {e}")
 
                 if stars is not None and not st.session_state.get(f"fb_stars_saved_{idx}", False):
-                    save_feedback(
-                        st.session_state.db_conn,
-                        conversation_id=st.session_state.conversation_id,
-                        message_index=idx,
-                        role=message.get("role", "assistant"),
-                        rating_type="stars",
-                        rating_value=stars + 1,
-                        reason="",
-                        message_content=message.get("content", "")
-                    )
-                    st.session_state[f"fb_stars_saved_{idx}"] = True
-                    st.toast(f"✅ {stars+1} stjärnor!")
+                    if "db_conn" in st.session_state and "conversation_id" in st.session_state:
+                        try:
+                            save_feedback(
+                                st.session_state.db_conn,
+                                conversation_id=st.session_state.conversation_id,
+                                message_index=idx,
+                                role=message.get("role", "assistant"),
+                                rating_type="stars",
+                                rating_value=stars + 1,
+                                reason="",
+                                message_content=message.get("content", "")
+                            )
+                            st.session_state[f"fb_stars_saved_{idx}"] = True
+                            st.toast(f"✅ {stars+1} stjärnor!")
+                        except Exception as e:
+                            st.warning(f"Kunde inte spara feedback: {e}")
 
     if user_text:
         handle_llm_request(model, temp)

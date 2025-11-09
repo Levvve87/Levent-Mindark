@@ -92,8 +92,10 @@ def render_debug_panel(memory, db_conn) -> None:
     with tab3:
         if st.button("Rensa chatt"):
             try:
-                delete_messages(db_conn, st.session_state.conversation_id)
-                st.session_state.messages.clear()
+                if "conversation_id" in st.session_state:
+                    delete_messages(db_conn, st.session_state.conversation_id)
+                if "messages" in st.session_state:
+                    st.session_state.messages.clear()
                 memory.clear_debug_info()
                 st.success("Chatt rensad!")
             except Exception as e:
@@ -173,7 +175,7 @@ def render_debug_panel(memory, db_conn) -> None:
         st.markdown("**Exportera data:**")
 
         if st.button("Exportera chatt"):
-            if st.session_state.messages:
+            if "messages" in st.session_state and st.session_state.messages:
                 json_data = json.dumps(st.session_state.messages, ensure_ascii=False, indent=2)
                 st.download_button(
                     label="Ladda ner chatt som JSON",
@@ -184,7 +186,7 @@ def render_debug_panel(memory, db_conn) -> None:
                 st.warning("Inga meddelanden att exportera.")
 
         if st.button("Exportera TXT"):
-            if st.session_state.messages:
+            if "messages" in st.session_state and st.session_state.messages:
                 result = []
                 for msg in st.session_state.messages:
                     timestamp = msg.get("timestamp", "Okänt tid")
