@@ -2,7 +2,7 @@
 
 ### Projekt: AI‑chat med debugpanel (Streamlit)
 ### Student: Levent Kantarci
-### Datum: [Fyll i aktuellt datumintervall]
+
 
 ---
 
@@ -60,7 +60,7 @@ Under projektets gång diskuterade jag också flera viktiga ämnen som tester, s
 
 Slutligen dokumenterade jag allt arbete i denna loggbok. Projektet har utvecklats från en grundläggande chattapp till ett mer robust verktyg med strömmande AI‑svar, tydlig state‑modell och persistens i SQLite. Detta har förbättrat användarupplevelsen avsevärt, möjliggjort återladdning av historik, och underlättat felsökning via debugpanelen. Jag är stolt över den resa jag har gjort och de färdigheter jag har utvecklat under projektets gång.
 
----
+---r
 
 ### Viktiga lärdomar
 
@@ -85,8 +85,3 @@ Appen är byggd med Streamlit för UI, OpenAI:s API för AI‑funktionalitet via
 
 ---
 
-### Exempel på viktiga commit‑meddelanden
-
-- "Streaming: icke‑blockerande LLM‑svar och responsiv debugpanel"
-- "Rensning: ta bort oanvänd kod och invoke"
-- "Uppdatering: systemprompt, konversationshantering, prompts i databas"
