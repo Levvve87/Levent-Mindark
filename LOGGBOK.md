@@ -1,26 +1,52 @@
 ## Loggbok
 
 ### Projekt: AI‑chat med debugpanel (Streamlit)
-### Student: [Ditt namn]
+### Student: Levent Kantarci
 ### Datum: [Fyll i aktuellt datumintervall]
 
 ---
 
-### Min resa genom projektet (kronologisk berättelse)
+### Vecka för vecka
 
-Jag började projektet med att sätta upp en grundläggande Streamlit‑app i `main.py`. Det var viktigt för mig att ha en tydlig struktur från början, så jag skapade ett eget lager för att hantera kommunikationen med OpenAI, som jag kallade `LLMHandler`. Detta gjorde det enklare att hålla koden organiserad och möjliggjorde framtida utbyggnader.
+**Vecka 1 – Planering och setup**  
+- Inventerade krav, skissade UI‑layout och valde teknikstack (Streamlit + LangChain + SQLite).  
+- Satt upp grundrepo, virtuell miljö och `.env`‑hantering för API‑nycklar.  
+- Dokumenterade projektstrukturen i README och planerade loggbokslayouten.
 
-När grundstrukturen var på plats fokuserade jag på att bygga den första huvudfunktionen: "Få tips". Jag lade till en spinner för att visa användaren att något hände, implementerade modellinställningar så att användaren kunde välja mellan olika OpenAI‑modeller, och byggde upp ett system för att hantera systemprompts. Jag insåg tidigt att felhantering var kritisk, så jag lade till try‑except‑block runt alla API‑anrop för att ge tydliga felmeddelanden om något gick fel.
+**Vecka 2 – Basfunktionalitet**  
+- Byggde huvudloopen i `main.py` med Streamlit‑widgets och statehantering.  
+- Implementerade `LLMHandler` som abstraherar OpenAI-anrop och gav robust felhantering.  
+- Första versionen av “Få tips” färdig: spinner, modellval, temperaturreglage och systemprompt.
 
-Efter att ha fått grundfunktionaliteten att fungera, bestämde jag mig för att lägga till ett "Demo/Exempel"‑läge. Detta skulle göra det enklare för användare att testa appen utan att behöva komma på egna prompts. Jag skapade en struktur med fördefinierade exempel som var organiserade efter ämne (som Programmering, Matematik, Språk, Design, Dataanalys och Projektledning) och svårighetsgrad (Lätt, Medel, Svår). Jag implementerade UI‑komponenter med radio‑knappar och selectboxar för att användarna enkelt skulle kunna välja mellan olika exempel.
+**Vecka 3 – Exempel och promptverktyg**  
+- Lade till “Demo/Exempel”-läget med färdiga prompts per ämne och svårighetsgrad.  
+- Införde UI-komponenter (selectbox, select_slider) för att styra exempelvisningar.  
+- Skapade “Prompt Builder” för att spara, läsa och ta bort egna prompts lokalt.
 
-Nästa steg blev att bygga en "Prompt Builder"‑funktion. Jag ville att användare skulle kunna spara sina egna prompts för återanvändning. Först byggde jag ett formulär där användare kunde ange namn, innehåll och en valfri beskrivning för sina prompts. Jag implementerade funktionalitet för att visa, redigera och ta bort sparade prompts. Senare, när jag implementerade databaslagring, kopplade jag detta till SQLite för att säkerställa att prompts sparades permanent.
+**Vecka 4 – Refaktorering och hjälpkomponenter**  
+- Införde hjälpfunktioner (`add_message_to_chat`, `get_system_prompt`) för att minska duplicering.  
+- Styrde UI‑logik och state tydligare genom att samla allt i `st.session_state`.  
+- Rensade kodbasen på onödiga kommentarer, emojis och gamla experiment för att höja läsbarheten.
 
-Under tiden jag arbetade med dessa funktioner, märkte jag att koden började bli rörig. Jag bestämde mig för att förenkla och organisera bättre. Jag skapade hjälpfunktioner som `add_message_to_chat` och `get_system_prompt` för att undvika kodduplicering. Ett problem jag stötte på var ett "Unexpected indentation"‑fel, som visade sig bero på att jag hade duplicerad kod. Detta lärde mig vikten av att vara noggrann när man refaktorerar kod. Jag tog också bort alla emojis från UI:et på begäran, och diskuterade senare möjligheten att ersätta dem med text. För att göra koden renare tog jag bort alla kommentarer utom rubriker, vilket gjorde koden mer läsbar och professionell.
+**Vecka 5 – Persistens och databaser**  
+- Kopplade `feedback_db.py` till SQLite och skapade tabeller för `conversations`, `messages`, `saved_prompts`, `feedback`.  
+- Implementerade spara/ladda funktioner för meddelanden, prompts och feedback samt export till JSON/CSV/DB.  
+- Säkerställde “single source of truth”: runtime i `st.session_state`, persistens i databasen.
 
-Parallellt med utvecklingen av appen arbetade jag också med flera Python‑övningar. Jag gick igenom uppgifter som "Till 120", "True/False", summor av tal och en funktion som heter `is_alt`. Genom dessa övningar lärde jag mig att hantera olika typer av fel: `TypeError` när jag försökte dividera strängar, `NameError` när jag hade stavfel i variabelnamn, och `IndentationError` när jag glömde indentera korrekt. Jag lärde mig också att läsa och tolka traceback‑meddelanden, vilket blev ovärderligt för felsökning.
+**Vecka 6 – Konversations- och debugpaneler**  
+- Byggde sidopanel för att lista, ladda, skapa och ta bort konversationer via `ui_conversations.py`.  
+- Förädlade debugpanelen med feedbacklista, massradering, exportknappar och säkerhetskontroller.  
+- Förbättrade MemoryManager för att endast hålla senaste debughändelserna.
 
-En viktig insikt kom när jag började tänka på minneshantering. Jag upptäckte att jag lagrade meddelanden och feedback på flera ställen, vilket kunde leda till inkonsistens. Jag bestämde mig för att implementera en "single source of truth"‑princip. Runtime‑state skulle ligga i `st.session_state.messages` för snabb UI‑hantering, medan all persistent lagring skulle ske i SQLite via `feedback_db.py`. Jag tog bort dubbellagring av både meddelanden och feedback, vilket gjorde systemet mer robust och lättare att underhålla.
+**Vecka 7 – Streaming och responsivitet**  
+- Migrerade till strömmande svar i `LLMHandler` och visade tokenflödet live i chatten.  
+- Implementerade avbryt-knapp, förbättrade felutskrifter och realtidsdebug (modell, svarstid, kostnad).  
+- Optimerade UI-upplevelsen och såg till att databaslogiken uppdateras i takt med streamen.
+
+**Vecka 8 – Säkerhet, tester och polish**  
+- Gick igenom säkerhet (API-nycklar, inputvalidering), backup-strategier och testidéer.  
+- Lade till extra säkerhetskontroller i session state, förbättrade felhantering i feedback och konversationsval.  
+- Slutdokumenterade projektresan i loggboken och förberedde leverans med tydlig teknisk översikt.
 
 För att implementera persistent lagring skapade jag flera tabeller i SQLite: `conversations` för att spåra olika konversationer, `messages` för att lagra alla meddelanden i rätt ordning, `saved_prompts` för användarnas sparade prompts, och `feedback` för användarfeedback. Jag byggde funktioner för att spara, läsa och ta bort data, samt exportfunktioner som låter användare exportera data som JSON, CSV eller hela databasfilen. Detta gav användarna kontroll över sina data och möjliggjorde backup.
 
